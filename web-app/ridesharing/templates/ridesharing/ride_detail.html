@@ -1,0 +1,29 @@
+{% extends "base_generic.html" %}
+
+{% block content %}
+<h1>Ride Owner: {{ ride.owner }}</h1>
+
+  <p><strong>Driver:</strong> {{ ride.driver }}</p>
+  <p><strong>PickUpTime:</strong> {{ ride.pickUpTime }}</p>
+  <p><strong>isConfirmed:</strong> {{ ride.isConfirmed }}</p>
+  <p><strong>isComplete:</strong>{% for isComplete in ride.isComplete.all %}{{ isComplete }}{% if not forloop.last %}, {% endif %}{% endfor %}</p>
+
+<p><strong>Sharers:</strong>
+  {% for sharers in ride.sharers.all %}
+  {{sharers}}
+  {% if not forloop.last %}, {% endif %}{% endfor %}</p>
+  
+<div style="margin-left:20px;margin-top:20px">
+  <h4>Sharers</h4>
+  {% for sharer in ride.ride_party.all %}
+  <hr>
+  {% if sharer.sharer != ride.owner %}
+  <p><strong>Name of sharer:</strong>{{sharer.sharer}}</p>
+  <p><strong>Number of passengers:</strong> {{sharer.num_pass}}</p>
+  {% else %}
+  <p><strong>Number of passengers in owner's party:</strong> {{sharer.num_pass}}</p>
+  {% endif %}
+  {% endfor %}
+<hr>
+   
+{% endblock %}

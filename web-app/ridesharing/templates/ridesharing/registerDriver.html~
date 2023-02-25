@@ -1,0 +1,28 @@
+{% extends 'base_generic.html' %}
+
+{% block content %}
+<form action= "/ridesharing/registerDriver/"  method="post">
+  {% csrf_token %}
+  <p>Change the Vehicle Platenumber:</p>
+  <td><input type="text"  name="PlateNumber" maxlength="8"> </td>
+  <p>Change the Vehicle Capacity:</p>
+  <input type="radio" name="Capacity" value="4" checked>4
+  <br>
+  <input type="radio" name="Capacity" value="6">6
+   <p>Change Vehicle Type:</p>
+  <input type="radio" name="Type" value="" checked>
+  <br>
+  <input type="radio" name="Type" value="SEDAN">SEDAN
+  <br>
+  <input type="radio" name="Type" value="MINIVAN">MINIVAN
+  <br>
+  <input type="radio" name="Type" value="CROSSOVER">CROSSOVER
+  <p>Do you still want to be a driver?</p>
+  <input type="radio" name="isDriver" value="True">True
+  <br>
+  <input type="radio" name="isDriver" value="False">False
+<br>
+<br>
+    <input type="submit" value="Submit">
+</form>
+{% endblock %}

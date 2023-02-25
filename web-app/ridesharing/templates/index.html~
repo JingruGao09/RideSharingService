@@ -1,0 +1,20 @@
+{% extends "base_generic.html" %}
+
+{% block content %}
+  <h1>Ride Sharing Home</h1>
+  <p>Welcome to Ride Sharing Service</p>
+  <h2>My Profile</h2>
+  <div class="container">
+    <p>Username: {{ user }}</p>
+    <p>Email: {{ user.email }}</p>
+    <p>Driver: {{ user.profile.isDriver }}</p>
+    <p>Vehicle: {{ user.profile.vehicle.type }}</p>
+    <p>Capacity: {{ user.profile.vehicle.capacity }}</p>
+    <p>The ride sharing service has the following record counts:</p>
+    <ul>
+    <li><strong>Rides:</strong> {{ num_rides }}</li>
+    <li><strong>Users:</strong> {{ num_users }}</li>
+    <li><a href="{% url 'RequestRideView'  %}">Request a Ride</a></li>
+    <li><a href="{% url 'ShareSearchRideView'  %}">Search and Join as a Sharer</a></li>
+  </ul>
+{% endblock %}

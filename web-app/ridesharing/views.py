@@ -1,0 +1,543 @@
+from django.shortcuts import render
+from django.conf import settings
+from django.core.mail import send_mail
+# Create your views here.
+from .models import Vehicle,Prof ,Ride, Party
+
+from django.http import HttpResponse,HttpResponseRedirect
+from django.template import loader
+from django.shortcuts import render, redirect
+from django.urls import reverse
+from ridesharing.models import Vehicle, Prof, Ride
+from django.contrib.auth.forms import UserCreationForm,UserChangeForm
+from django.contrib.auth import login, authenticate
+from django.contrib.auth.models import User
+from .forms import DriverRegistrationForm, RideRequestForm, JoinRequestForm
+
+import pdb
+
+def index(request):
+    """View function for home page of site."""
+    # Generate counts of some of the main objects
+    num_rides = Ride.objects.all().count()
+    num_users = Prof.objects.all().count()
+    if request.user.is_authenticated:
+        return render(
+            request,
+            'index.html',
+            context={'num_rides':num_rides,'num_users':num_users,}
+        )
+    return redirect('/accounts/login/?next=/ridesharing/')
+
+
+def PendingRideListView(request):
+    ride = Prof.objects.filter(pk = request.user.profile.pk).first().owner_set.all().filter(isConfirmed = False)
+    #check is num_sharer is 1, only owner itself, no one else is sharing
+    #new add here
+    ride_list=[]
+    for i in ride:
+        if i.count_sharers() == 1:
+            ride_list.append(i)
+    sharers = map(lambda x : x.sharers, ride_list)
+    template = loader.get_template('ridesharing/ride_list.html')
+    context = {
+        'ride_list': ride_list,
+        'edit' : True,
+        'comfirm': False,
+        'join' : False,
+        'complete' : False,
+    }
+    return HttpResponse(template.render(context, request))
+
+def ConfirmedRideListView(request):
+    ride_list = Prof.objects.filter(pk = request.user.profile.pk).first().owner_set.all().filter(isConfirmed = True)
+    template = loader.get_template('ridesharing/ride_list.html')
+    context = {
+        'ride_list': ride_list,
+        'edit' : False,
+        'confirm' : False,
+        'join' : False,
+        'complete' : False,
+    }
+    return HttpResponse(template.render(context, request))
+
+
+
+def ConfirmedRideDriverListView(request):
+    ride_list = Prof.objects.filter(pk = request.user.profile.pk).first().driver_set.all().filter(isConfirmed = True)
+    template = loader.get_template('ridesharing/ride_list.html')
+    context = {
+        'ride_list': ride_list,
+        'edit' : False,
+        'confirm' : False,
+        'join' : False,
+        'complete' : True,
+    }
+    return HttpResponse(template.render(context, request))
+
+#added
+
+def CompletedRideDriverListView(request):
+    ride_list = Prof.objects.filter(pk = request.user.profile.pk).first().driver_set.all().filter(isComplete = True)
+    template = loader.get_template('ridesharing/ride_list.html')
+    context = {
+        'ride_list': ride_list,
+        'edit' : False,
+        'confirm' : False,
+        'join' : False,
+        'complete' : False,
+    }
+    return HttpResponse(template.render(context, request))
+
+#added
+def JoinRideListView(request):
+    ride_list = Prof.objects.filter(pk = request.user.profile.pk).first().sharers_set.all().filter(isConfirmed = False)
+    template = loader.get_template('ridesharing/ride_list.html')
+    context = {
+        'ride_list': ride_list,
+        'edit' : True,
+        'confirm' : False,
+        'join' : False,
+        'complete' : False,
+    }
+    return HttpResponse(template.render(context, request))
+
+
+from django.db.models import Q
+
+def ConfirmRideView(request, pk):
+    ride = Ride.objects.filter(pk = pk).filter(~Q(owner = request.user.profile)).first()
+    ride.isConfirmed = True
+    ride.driver = request.user.profile
+    ride.type = request.user.profile.vehicle.type
+    #add
+    ride.capacity = request.user.profile.vehicle.capacity
+    ride.save()
+    #working now!
+    subject = 'Your ride is confirmed!'
+    from_email = settings.EMAIL_HOST_USER
+    to_email=[]
+    #pdb.set_trace()
+    for sharer in ride.sharers.all():
+        to_email.append(sharer.user.email)
+    #print(to_email)
+    #to_email = [ride.sharers.email.user.all()]
+    contact_message = 'From ridesharing service'
+    some_html_message = """
+    <h1>Hello,</h1>
+    <p>Your ride has been confirmed.</p>
+    <p>Please check the information on the web site.</p>
+    <br></br>
+    <p>Ridesharing</p>
+    """
+    send_mail(subject,
+              contact_message,
+              from_email,
+              to_email,
+              html_message = some_html_message,
+              fail_silently=True)
+    return HttpResponseRedirect('/ridesharing/confirmedRidesDriver')
+
+def CompleteRideView(request, pk):
+    ride = Ride.objects.filter(pk = pk).filter(driver = request.user.profile).first()
+    ride.isComplete = True
+    ride.save()
+    return HttpResponseRedirect('/ridesharing/completedRidesDriver')
+
+'''
+#new add, join the ride as a sharer
+def JoinRideView(request, pk):
+    ride = Ride.objects.filter(pk = pk).filter(~Q(owner = request.user.profile)).first()
+    #do something, e.g.calcualte num_pass!! update
+
+    ride.save()
+    
+    return HttpResponseRedirect('/ridesharing/sharingRides')
+'''
+
+
+
+def DriverOpenRideListView(request):
+    ride_list_w_type = Ride.objects.filter(isConfirmed = False).filter(type = request.user.profile.vehicle.type)
+    ride_list_no_type = Ride.objects.filter(isConfirmed = False).filter(type = "",driver=None)
+    ride_list = ride_list_w_type | ride_list_no_type
+    ride_list = ride_list.exclude(owner = request.user.profile).filter(total_passenger__lte = request.user.profile.vehicle.capacity)
+    template = loader.get_template('ridesharing/ride_list.html')
+    context = {
+        'ride_list': ride_list,
+        'edit' : False,
+        'confirm' : True,
+        'join' : False,
+        'complete' : False,
+    }
+    return HttpResponse(template.render(context, request))
+'''
+#new add, join the ride as a sharer
+def SharerOpenRideListView(request):
+    ride_list = Ride.objects.filter(isComplete = False)
+    #need to compare capacity here
+    #ride_list = ride_list_w_type | ride_list_no_type
+    ride_list = ride_list.exclude(owner = request.user.profile)
+    template = loader.get_template('ridesharing/ride_list.html')
+    context = {
+        'ride_list': ride_list,
+        'edit' : False,
+        'confirm' : False,
+        'join' : True,
+    }
+    return HttpResponse(template.render(context, request))
+'''
+
+
+def RegisterDriverView(request):
+    #prof = Prof.objects.filter(pk = request.user.pk).first()
+# if this is a POST request we need to process the form data
+    if request.method == 'POST':
+        # create a form instance and populate it with data from the request:
+        form = DriverRegistrationForm(request.POST)
+        # check whether it's valid:
+        if form.is_valid():
+            # process the data in form.cleaned_data as required
+            # ...
+            # redirect to a new URL:
+            
+            PlateNumber  = form.cleaned_data['PlateNumber']
+            Capacity  = form.cleaned_data['Capacity']
+            Type  = form.cleaned_data['Type']
+            newVehicle = Vehicle.objects.create(plateNumber = PlateNumber, capacity = Capacity, type = Type)
+            prof = Prof.objects.filter(pk = request.user.profile.pk).first()
+            #request.user.profile
+            #prof = Prof.objects.filter(pk = request.user.pk).first() 
+            #prof = Prof.objects.filter(id = request.user_id).first()
+            #user = User.objects.filter(pk = request.user.pk).first()
+            #prof = user.prof
+            prof.vehicle = newVehicle
+            prof.isDriver = True
+            #pdb.set_trace()
+            prof.save()
+            return HttpResponseRedirect('/ridesharing/')
+    else:
+        form = DriverRegistrationForm()
+    return render(request, 'ridesharing/registerDriver.html', {'form': form})
+#added here
+
+
+from .forms import DriverUpdateForm
+def EditDriverView(request):
+    user_list = Prof.objects.filter(isDriver=True,pk=request.user.pk).first()
+    if request.method == 'POST':
+        form = DriverUpdateForm(request.POST)
+        if form.is_valid():
+            user_list.vehicle.plateNumber  = form.cleaned_data['PlateNumber']
+            user_list.vehicle.capacity  = form.cleaned_data['Capacity']
+            user_list.vehicle.type  = form.cleaned_data['Type']
+            isDriver = form.cleaned_data['isDriver']
+            user_list.isDriver = isDriver
+            user_list.save()
+            user_list.vehicle.save()
+#            pdb.set_trace()
+            return HttpResponseRedirect('/ridesharing/')
+        # if a GET (or any other method) we'll create a blank form
+    else:
+        form = DriverUpdateForm()
+    return render(request, 'ridesharing/editDriver.html', {'form': form})
+
+
+
+'''
+def RegisterUserView(request):
+    if request.method == 'POST':
+        form = UserCreationForm(request.POST)
+        if form.is_valid():
+            form.save()
+            username = form.cleaned_data.get('username')
+            email = form.cleaned_data.get('email')
+            raw_password = form.cleaned_data.get('password1')
+            user = authenticate(username=username, password=raw_password)
+            login(request, user)
+            return redirect('/ridesharing/')
+    else:
+        form = UserCreationForm()
+    return render(request, 'ridesharing/registerUser.html', {'form': form})
+'''
+
+from django.contrib.auth.forms import UserCreationForm
+from .forms import CustomUserCreationForm
+#CustomUserUpdateForm
+from django.contrib import messages
+from django.contrib.auth.decorators import login_required
+#...
+def RegisterUserView(request):
+    if request.method == 'POST':
+        form = CustomUserCreationForm(request.POST)
+        if form.is_valid():
+            form.save()
+            username = form.cleaned_data.get('username')
+            new_username = form.cleaned_data['username'].lower()
+            '''
+            r = User.objects.filter(username=new_username)
+            if r.count():
+                raise  ValidationError("Username already exists")
+            new_email = self.cleaned_data['email'].lower()
+            r = User.objects.filter(email=new_email)
+            if r.count():
+                raise  ValidationError("Email already exists")
+            '''
+            raw_password = form.cleaned_data.get('password1')
+            user = authenticate(username=username, password=raw_password)
+            messages.success(request, 'Account created successfully')
+            login(request, user)
+            return redirect('/ridesharing/')
+    else:
+        form = CustomUserCreationForm()
+ 
+    return render(request, 'ridesharing/registerUser.html', {'form': form})
+#please check this part, because save password is not working
+
+from .forms import EditProfForm
+def EditProfView(request):
+    pdb.set_trace()
+    cuser = User.objects.filter(pk = request.user.pk).first()
+    if request.method == 'POST':
+        form=EditProfForm(request.POST)
+        if form.is_valid():
+            cuser = request.user
+            cuser.username = form.cleaned_data['username']
+            cuser.email  = form.cleaned_data['email']
+            
+            password1 = form.cleaned_data['password1']
+            password2 = form.cleaned_data['password2']
+            raw_password = form.cleaned_data.get('password1')
+            #cuser = authenticate(username=cuser.username, password=raw_password)
+            #form.save(request.user.pk)
+
+            cuser.set_password(raw_password)
+            cuser.save()
+            return redirect('/accounts/login/?next=/ridesharing/')
+        #return HttpResponseRedirect('/ridesharing/')
+         # if a GET (or any other method) we'll create a blank form
+    else:
+        
+        form = EditProfForm({'username':cuser.username,
+                             'email':cuser.email})
+        #form = EditProfForm(instance=request.user,pk = request.user.pk)
+    return render(request, 'ridesharing/editProf.html', {'form': form})
+
+'''
+#failed!!!
+def EditProfView(request):
+    curruser = Prof.objects.filter(pk = request.user.pk).first()
+    #password1 = form.cleaned_data['password1']
+    #password2 = form.cleaned_data['password2']
+    if request.method == 'POST':
+        form = CustomUserUpdateForm(request.POST)
+        if form.is_valid():
+            #pdb.set_trace()
+            curruser.user.username  = form.cleaned_data['username']
+            curruser.user.email  = form.cleaned_data['email']
+            password1 = form.cleaned_data['password1']
+            password2 = form.cleaned_data['password2']
+            curruser.save()
+            #form.save()
+            return HttpResponseRedirect('/ridesharing/')
+         # if a GET (or any other method) we'll create a blank form
+    else:
+        form = CustomUserUpdateForm({'username':curruser.user.username,
+                                    'email':curruser.user.email,
+                                    'password1' : password1,
+                                    'password2' : password2})
+    return render(request, 'ridesharing/editProf.html', {'form': form})
+'''
+
+def RequestRideView(request):
+# if this is a POST request we need to process the form data
+#    pdb.set_trace()
+    if request.method == 'POST':
+        # create a form instance and populate it with data from the request:
+        form = RideRequestForm(request.POST)
+        # check whether it's valid:
+        if form.is_valid():
+            # process the data in form.cleaned_data as required
+            # ...
+            # redirect to a new URL:
+            pickUpTime  = form.cleaned_data['pickUpTime']
+            canBeShared  = form.cleaned_data['canBeShared']
+            num_pass  = form.cleaned_data['num_pass']
+            prof = Prof.objects.filter(pk = request.user.pk).first()
+            vehicle_type = form.cleaned_data['vehicle_type']
+            destination = form.cleaned_data['destination']
+            total_passenger = num_pass;#added
+            ride = Ride.objects.create(owner = prof,
+                                       #sharers=sharers.add(prof),
+                                       pickUpTime = pickUpTime,
+                                       canBeShared = canBeShared,
+                                       type = vehicle_type,
+                                       destination = destination,
+                                       total_passenger = total_passenger)
+            ride.sharers.add(prof)#added
+            ride.save()
+            party = Party.objects.create(sharer = prof, ride = ride, num_pass = num_pass)
+            return HttpResponseRedirect('/ridesharing/pendingRides/')
+         # if a GET (or any other method) we'll create a blank form
+        else:
+            if "pickUpTime" in form.errors.keys():
+                form.errors["pickUpTime"] = ["Please Format Date as YYYY-MM-DD HH:MM:SS"]
+    else:
+        form = RideRequestForm()
+    return render(request, 'ridesharing/requestRide.html', {'form': form})
+
+
+def EditRideView(request, ride_id):
+# if this is a POST request we need to process the form data
+    ride = Ride.objects.filter(id = ride_id).first()
+    ownerParty = ride.ride_party.filter(sharer = request.user.profile).first()
+    if request.method == 'POST':
+        # create a form instance and populate it with data from the request:
+        form = RideRequestForm(request.POST)
+        # check whether it's valid:
+        if form.is_valid():
+            #pdb.set_trace()
+            # process the data in form.cleaned_data as required
+            # ...
+            # redirect to a new URL:
+            ride.pickUpTime  = form.cleaned_data['pickUpTime']
+            ride.canBeShared  = form.cleaned_data['canBeShared']
+            ride.type = form.cleaned_data['vehicle_type']
+            #add
+            #print(ride.total_passenger)
+            ride.total_passenger = ride.total_passenger - ownerParty.num_pass
+            #print(ride.total_passenger)
+            ride.destination = form.cleaned_data['destination']
+            ride.save()
+            ownerParty.num_pass  = form.cleaned_data['num_pass']
+            ownerParty.save()
+            ride.total_passenger += ownerParty.num_pass
+            #for sharer in ride.sharers.all():
+            #    if sharer != ride.owner:
+            #        ride.total_passenger+=ride.ride_party.num_pass
+            #ride.total_passenger = ownerParty.num_pass
+            ride.save()
+            return HttpResponseRedirect('/ridesharing/pendingRides/')
+         # if a GET (or any other method) we'll create a blank form
+    else:
+        form = RideRequestForm({'pickUpTime': ride.pickUpTime,
+                                'canBeShared': ride.canBeShared,
+                                'num_pass' : ownerParty.num_pass,
+                                'vehicle_type' : ride.type,
+                                'destination' : ride.destination})
+    return render(request, 'ridesharing/editRide.html', {'form': form, 'ride_number' : ride_id})
+
+def JoinRideView(request, ride_id):
+# if this is a POST request we need to process the form data
+    ride = Ride.objects.filter(id = ride_id).first()
+    '''
+    prof = Prof.objects.filter(pk = request.user.pk).first()
+    ride.sharers.add(prof)
+    ride.save()
+    '''
+    #pdb.set_trace()
+    #ride.Sharers()
+    #shareParty=Party.objects.create(sharer = prof, ride = ride,)
+    #sharerParty = ride.ride_party.filter(sharer = request.user.profile)
+    if request.method == 'POST':
+        # create a form instance and populate it with data from the request:
+        form = JoinRequestForm(request.POST)
+        # check whether it's valid:
+        if form.is_valid():
+            #pdb.set_trace()
+            prof = Prof.objects.filter(pk = request.user.pk).first()
+            ride.sharers.add(prof)
+            ride.save()
+            num_pass  = form.cleaned_data['num_pass']
+            sharerParty=Party.objects.create(sharer = prof, ride = ride,num_pass = num_pass)
+            sharerParty.save()
+            #ride.total_passenger = ownerParty.num_pass
+            #for sharer in ride.sharers.all():
+            #    if sharer != ride.owner:
+            ride.total_passenger+=sharerParty.num_pass
+            #ride.total_passenger = ownerParty.num_pass
+            ride.save()
+            return HttpResponseRedirect('/ridesharing/pendingRides/')
+         # if a GET (or any other method) we'll create a blank form
+    else:
+        form = JoinRequestForm()
+    return render(request, 'ridesharing/joinRide.html', {'form': form, 'ride_number' : ride_id})
+
+#for driver to search rides they want to confirm
+def SearchRideView(request):
+    error = False
+    if 'q1' and 'q2' and 'capacity'and 'vehicle_type'in request.GET:
+        q1 = request.GET['q1']
+        q2 = request.GET['q2']
+        capacity = request.GET['capacity']
+        vehicle_type = request.GET['vehicle_type']
+        if not q1:
+            error = True
+        elif not q2:
+            error = True
+        else:
+            #add vehicle type to search
+            '''
+            ride = Ride.objects.filter(pickUpTime__range=(q1,q2),destination = dest,isConfirmed=False)
+            for i in ride:
+            party = Party.objects.create(sharer = i.sharers_set, ride = i, num_pass = 
+            if (ride[i].sharer_set)<ride.driver.vehicle.capacity-
+            '''
+            ride_list = Ride.objects.filter(pickUpTime__range=(q1,q2),isConfirmed=False,capacity__lte=capacity,type=vehicle_type)
+            template = loader.get_template('ridesharing/ride_list.html')
+            context = {
+                'ride_list' : ride_list,
+                'edit' : False,
+                'confirm' : True,
+                'join' : False,
+                'complete' : False,
+            }
+            #check is ride is available for sharer
+            return HttpResponse(template.render(context, request))
+        
+    return render(request, 'ridesharing/searchRide.html')
+
+#new add
+def ShareSearchRideView(request):
+    error = False
+    if 'q1' and 'q2' and 'dest'and 'num_pass'in request.GET:
+        q1 = request.GET['q1']
+        q2 = request.GET['q2']
+        dest = request.GET['dest']
+        num_pass = request.GET['num_pass']
+        if not q1:
+            error = True
+        elif not q2:
+            error = True
+        else:
+            ride_list = Ride.objects.filter(pickUpTime__range=(q1,q2),destination = dest,isConfirmed=False,canBeShared=True)
+            
+            template = loader.get_template('ridesharing/ride_list.html')
+            context = {
+                'ride_list' : ride_list,
+                'edit' : False,
+                'confirm' : False,
+                'join' : True,
+                'complete' : False,
+            }
+            #check is ride is available for sharer
+            return HttpResponse(template.render(context, request))
+        
+    return render(request, 'ridesharing/sharesearchRide.html')
+
+
+from django.views import generic
+from django.contrib.auth.decorators import login_required
+from django.utils.decorators import method_decorator
+
+@method_decorator(login_required, name='dispatch')
+class RideListView(generic.ListView):
+    model = Ride
+    def get_queryset(self):
+        return Ride.objects.filter(isComplete = False)
+
+@method_decorator(login_required, name='dispatch')
+class RideDetailView(generic.DetailView):
+    model = Ride
+
+

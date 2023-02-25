@@ -1,0 +1,17 @@
+{% extends 'base_generic.html' %}
+
+{% block content %}
+<form action= "/ridesharing/sharesearchRides/"  method="get">
+  <p>Please enter searching date:</p>
+  <td><input type="text"  class="datepicker" name="q1"> </td>
+    <td style="width:5%"> between </td>
+  <td><input type="text"  class="datepicker" name="q2"></td>
+  <p>Please enter destination:</p>
+    <input type="text" name="dest"></td>
+  <p>Please enter number of passengers with you:</p>
+    <input type="text" name="num_pass"></td>
+<br>
+<br>
+    <input type="submit" value="Search">
+</form>
+{% endblock %}
